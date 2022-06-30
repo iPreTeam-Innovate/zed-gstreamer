@@ -17,4 +17,5 @@ my-plugin-*.tar.*
 *.user
 *.user.*
 *build*
+cmake/
 
