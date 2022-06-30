@@ -129,7 +129,8 @@ typedef enum {
     GST_ZEDSRC_ONLY_RIGHT = 1,
     GST_ZEDSRC_LEFT_RIGHT = 2,
     GST_ZEDSRC_DEPTH_16 = 3,
-    GST_ZEDSRC_LEFT_DEPTH = 4
+    GST_ZEDSRC_LEFT_DEPTH = 4,
+    GST_ZEDSRC_RGBD = 5
 } GstZedSrcStreamType;
 
 typedef enum {
@@ -360,6 +361,10 @@ static GType gst_zedsrc_stream_type_get_type (void)
             { GST_ZEDSRC_LEFT_DEPTH,
               "8 bits- 4 channels Left and Depth(image)",
               "Left and Depth up/down [BGRA]" },
+            // Added: RGBD Stream-Type
+            { GST_ZEDSRC_RGBD,
+              "16 bits- 1 channels RGBD",
+              "Left and Depth up/down [RGBD]" },
             { 0, NULL, NULL },
         };
 
@@ -1539,6 +1544,13 @@ static gboolean gst_zedsrc_calculate_caps(GstZedSrc* src)
     {
         height *= 2;
     }
+    // Added: height will be of 4 times because RGBD channels are vertically stacked 
+    // --->
+    else if(src->stream_type==GST_ZEDSRC_RGBD){
+        height *= 4;
+        format = GST_VIDEO_FORMAT_GRAY16_LE;
+    }
+    // <---
 
     fps = static_cast<gint>(cam_info.camera_configuration.fps);
 
@@ -1615,6 +1627,15 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
         src->depth_mode = static_cast<gint>(init_params.depth_mode);
         GST_WARNING_OBJECT(src, "'stream-type' setting requires depth calculation. Depth mode value forced to ULTRA");
     }
+    // Added: depth_mode for RGBD
+    // --->
+    if(src->stream_type==GST_ZEDSRC_RGBD && init_params.depth_mode==sl::DEPTH_MODE::NONE)
+    {
+        init_params.depth_mode=sl::DEPTH_MODE::ULTRA;
+        src->depth_mode = static_cast<gint>(init_params.depth_mode);
+        GST_WARNING_OBJECT(src, "'stream-type' setting requires depth calculation. Depth mode value forced to ULTRA");
+    }
+    // <---
     GST_INFO(" * Depth Mode: %s", sl::toString(init_params.depth_mode).c_str());
     init_params.coordinate_units = sl::UNIT::MILLIMETER; // ready for 16bit depth image
     GST_INFO(" * Coordinate units: %s", sl::toString(init_params.coordinate_units).c_str());
@@ -2008,6 +2029,15 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
         ret = src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH, sl::MEM::CPU );
         //depth_data.write( "test_depth_32.png" );
     }
+    // Added: For RGBD
+    // --->
+    else if(src->stream_type== GST_ZEDSRC_RGBD)
+    {
+        ret = src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU );
+        ret = src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH, sl::MEM::CPU );
+        //depth_data.write( "test_depth_32.png" );
+    }
+    // <---
 
     if( ret!=sl::ERROR_CODE::SUCCESS )
     {
@@ -2058,6 +2088,38 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
             //printf( "#%lu: %u / %g %u \n", i, *(gst_data-1), *(depthDataPtr-1), static_cast<uint32_t>(*(depthDataPtr-1)));
         }
     }
+    // Added: For RGBD
+    // --->
+    else if(src->stream_type== GST_ZEDSRC_RGBD)
+    {
+        
+        // R data on Top
+        uint32_t* gst_r_data = (uint32_t*)(minfo.data);
+        
+        // B data is after R
+        uint32_t* gst_g_data = (uint32_t*)(minfo.data + minfo.size/4);
+        
+        // G data is after B
+        uint32_t* gst_b_data = (uint32_t*)(minfo.data + minfo.size/2);
+        
+        // Depth data is after G
+        uint32_t* gst_d_data = (uint32_t*)(minfo.data + (int)(3*minfo.size/4));
+
+        // Left Imaage Data
+        sl::uchar4* leftImgDataPtr = left_img.getPtr<sl::uchar4>();
+        // Depth Data
+        sl::float1* depthDataPtr = depth_data.getPtr<sl::float1>();
+
+        for (unsigned long i = 0; i < minfo.size/4; i++) {
+            *(gst_r_data++) = static_cast<uint32_t>((int)(*leftImgDataPtr).r);
+            *(gst_g_data++) = static_cast<uint32_t>((int)(*leftImgDataPtr).g);
+            *(gst_b_data++) = static_cast<uint32_t>((int)(*leftImgDataPtr).b);
+            *(gst_d_data++) = static_cast<uint32_t>(*(depthDataPtr++));
+
+            leftImgDataPtr++;
+        }
+    }
+    // <---
     else
     {
         memcpy(minfo.data, left_img.getPtr<sl::uchar4>(), minfo.size);
