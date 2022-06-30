@@ -26,6 +26,10 @@
 #include "gstzedsrc.h"
 #include "gst-zed-meta/gstzedmeta.h"
 
+#include <iostream>
+#include <cstddef>
+#include <cstring>
+
 GST_DEBUG_CATEGORY_STATIC (gst_zedsrc_debug);
 #define GST_CAT_DEFAULT gst_zedsrc_debug
 
@@ -130,7 +134,9 @@ typedef enum {
     GST_ZEDSRC_LEFT_RIGHT = 2,
     GST_ZEDSRC_DEPTH_16 = 3,
     GST_ZEDSRC_LEFT_DEPTH = 4,
-    GST_ZEDSRC_RGBD = 5
+    // Added: New Stream Types
+    GST_ZEDSRC_RGBD = 5,
+    GST_ZEDSRC_RGBD_META = 6,
 } GstZedSrcStreamType;
 
 typedef enum {
@@ -362,9 +368,17 @@ static GType gst_zedsrc_stream_type_get_type (void)
               "8 bits- 4 channels Left and Depth(image)",
               "Left and Depth up/down [BGRA]" },
             // Added: RGBD Stream-Type
+            // --->
             { GST_ZEDSRC_RGBD,
               "16 bits- 1 channels RGBD",
               "Left and Depth up/down [RGBD]" },
+            // <---
+            // Added: RGBD with META Stream-Type
+            // --->
+            { GST_ZEDSRC_RGBD_META,
+              "16 bits- 1 channels RGBD with Meta",
+              "Left and Depth snd Meta up/down [RGBDM]" },
+            // <---
             { 0, NULL, NULL },
         };
 
@@ -603,28 +617,56 @@ static GstStaticPadTemplate gst_zedsrc_src_template =
                                                    "framerate = (fraction)15"
                                                    ";"
                                                    // Added: Streams for RGBD
+                                                   // --->
                                                    "video/x-raw, " 
                                                    "format = (string)GRAY16_LE, "
                                                    "width = (int)672, "
-                                                   "height = (int)1504 , "
+                                                   "height = (int)1504 , " // 376 x 4
                                                    "framerate = (fraction) { 15, 30, 60, 100 }"
                                                    ";"
                                                    "video/x-raw, " 
                                                    "format = (string)GRAY16_LE, "
                                                    "width = (int)1280, "
-                                                   "height = (int)2280, "
+                                                   "height = (int)2280, "  // 720 x 4
                                                    "framerate = (fraction) { 15, 30, 60 }"
                                                    ";"
                                                    "video/x-raw, " 
                                                    "format = (string)GRAY16_LE, "
                                                    "width = (int)1920, "
-                                                   "height = (int)4320, "
+                                                   "height = (int)4320, "   // 1080 x 4
                                                    "framerate = (fraction) { 15, 30 }"
                                                    ";"
                                                    "video/x-raw, " 
                                                    "format = (string)GRAY16_LE, "
                                                    "width = (int)2208, "
-                                                   "height = (int)4968, "
+                                                   "height = (int)4968, "   // 1242 x 4
+                                                   "framerate = (fraction)15"
+                                                   ";"
+                                                   // <---
+                                                   // Added: Streams for RGBD with Meta
+                                                   // --->
+                                                   "video/x-raw, " 
+                                                   "format = (string)GRAY16_LE, "
+                                                   "width = (int)672, "
+                                                   "height = (int)1880 , " // 376 x (4 + 1) (for Meta)
+                                                   "framerate = (fraction) { 15, 30, 60, 100 }"
+                                                   ";"
+                                                   "video/x-raw, " 
+                                                   "format = (string)GRAY16_LE, "
+                                                   "width = (int)1280, "
+                                                   "height = (int)3600, "  // 720 x (4 + 1) (for Meta)
+                                                   "framerate = (fraction) { 15, 30, 60 }"
+                                                   ";"
+                                                   "video/x-raw, " 
+                                                   "format = (string)GRAY16_LE, "
+                                                   "width = (int)1920, "
+                                                   "height = (int)5400, "   // 1080 x (4 + 1) (for Meta)
+                                                   "framerate = (fraction) { 15, 30 }"
+                                                   ";"
+                                                   "video/x-raw, " 
+                                                   "format = (string)GRAY16_LE, "
+                                                   "width = (int)2208, "
+                                                   "height = (int)6210, "   // 1242 x (4 + 1) (for Meta)
                                                    "framerate = (fraction)15"
                                                    ";"
                                                    // <---
@@ -1576,6 +1618,10 @@ static gboolean gst_zedsrc_calculate_caps(GstZedSrc* src)
         height *= 4;
         format = GST_VIDEO_FORMAT_GRAY16_LE;
     }
+    else if(src->stream_type==GST_ZEDSRC_RGBD_META){
+        height *= (4 + 1);
+        format = GST_VIDEO_FORMAT_GRAY16_LE;
+    }
     // <---
 
     fps = static_cast<gint>(cam_info.camera_configuration.fps);
@@ -1655,7 +1701,7 @@ static gboolean gst_zedsrc_start( GstBaseSrc * bsrc )
     }
     // Added: depth_mode for RGBD
     // --->
-    if(src->stream_type==GST_ZEDSRC_RGBD && init_params.depth_mode==sl::DEPTH_MODE::NONE)
+    if((src->stream_type==GST_ZEDSRC_RGBD || src->stream_type==GST_ZEDSRC_RGBD_META) && init_params.depth_mode==sl::DEPTH_MODE::NONE)
     {
         init_params.depth_mode=sl::DEPTH_MODE::ULTRA;
         src->depth_mode = static_cast<gint>(init_params.depth_mode);
@@ -2055,9 +2101,9 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
         ret = src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH, sl::MEM::CPU );
         //depth_data.write( "test_depth_32.png" );
     }
-    // Added: For RGBD
+    // Added: For RGBD and RGBDM
     // --->
-    else if(src->stream_type== GST_ZEDSRC_RGBD)
+    else if(src->stream_type== GST_ZEDSRC_RGBD || src->stream_type== GST_ZEDSRC_RGBD_META)
     {
         ret = src->zed.retrieveImage(left_img, sl::VIEW::LEFT, sl::MEM::CPU );
         ret = src->zed.retrieveMeasure(depth_data, sl::MEASURE::DEPTH, sl::MEM::CPU );
@@ -2114,11 +2160,10 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
             //printf( "#%lu: %u / %g %u \n", i, *(gst_data-1), *(depthDataPtr-1), static_cast<uint32_t>(*(depthDataPtr-1)));
         }
     }
-    // Added: For RGBD
+    // Added: For RGBD and RGBD Meta
     // --->
     else if(src->stream_type== GST_ZEDSRC_RGBD)
     {
-        
         // R data on Top
         uint16_t* gst_r_data = (uint16_t*)(minfo.data);
         
@@ -2137,6 +2182,37 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
         sl::float1* depthDataPtr = depth_data.getPtr<sl::float1>();
 
         for (unsigned long i = 0; i < minfo.size/8; i++) {
+            *(gst_r_data++) = static_cast<uint16_t>(100*(int)(*leftImgDataPtr).b);
+            *(gst_g_data++) = static_cast<uint16_t>(100*(int)(*leftImgDataPtr).g);
+            *(gst_b_data++) = static_cast<uint16_t>(100*(int)(*leftImgDataPtr).r);
+            *(gst_d_data++) = static_cast<uint16_t>(*(depthDataPtr++));
+
+            leftImgDataPtr++;
+        }
+    }
+    // <---
+    // Added: For RGBD and RGBD Meta
+    // --->
+    else if(src->stream_type== GST_ZEDSRC_RGBD_META)
+    {
+        // R data on Top
+        uint16_t* gst_r_data = (uint16_t*)(minfo.data);
+        
+        // B data is after R
+        uint16_t* gst_g_data = (uint16_t*)(minfo.data + (int)(minfo.size/5));
+        
+        // G data is after B
+        uint16_t* gst_b_data = (uint16_t*)(minfo.data + (int)(2*minfo.size/5));
+        
+        // Depth data is after G
+        uint16_t* gst_d_data = (uint16_t*)(minfo.data + (int)(3*minfo.size/5));
+
+        // Left Imaage Data
+        sl::uchar4* leftImgDataPtr = left_img.getPtr<sl::uchar4>();
+        // Depth Data
+        sl::float1* depthDataPtr = depth_data.getPtr<sl::float1>();
+
+        for (unsigned long i = 0; i < minfo.size/10; i++) {
             *(gst_r_data++) = static_cast<uint16_t>(100*(int)(*leftImgDataPtr).b);
             *(gst_g_data++) = static_cast<uint16_t>(100*(int)(*leftImgDataPtr).g);
             *(gst_b_data++) = static_cast<uint16_t>(100*(int)(*leftImgDataPtr).r);
@@ -2400,7 +2476,38 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
         }
     }
     // <---- Object detection metadata
+    // Added: Add Meta Data
+    // --->
+    if(src->stream_type== GST_ZEDSRC_RGBD_META)
+    {
+        // Creating a new stream for meta data
+        std::stringstream s;
+        
+        // Print all the variables to the stream
+        s << 
+        info.cam_model << ";" << info.stream_type << ";" << info.grab_single_frame_width << ";" << info.grab_single_frame_height << ";" << 
+        pose.pose_avail << ";" << pose.pos_tracking_state << ";" << 
+            pose.pos[0] << ";" << pose.pos[1] << ";" << pose.pos[2] << ";" << 
+            pose.orient[0] << ";" << pose.orient[1] << ";" << pose.orient[2] << ";" << 
+        sens.sens_avail << ";" <<
+            sens.imu.imu_avail << ";" << 
+                sens.imu.acc[0] << ";" << sens.imu.acc[1] << ";" << sens.imu.acc[2] << ";" << 
+                sens.imu.gyro[0] << ";" << sens.imu.gyro[1] << ";" << sens.imu.gyro[2] << ";" <<
+                sens.imu.temp << ";" <<
+            sens.mag.mag_avail << ";" << 
+                sens.mag.mag[0] << ";" << sens.mag.mag[1] << ";" << sens.mag.mag[2] << ";" << 
+            sens.env.env_avail << ";" << sens.env.press << ";" << sens.env.temp << ";" << 
+            sens.temp.temp_avail << ";" << sens.temp.temp_cam_left << ";" << sens.temp.temp_cam_right;
+        
+        // retrieve the result as std::string
+        std::string meta_data = s.str();
 
+        // Meta data is after Depth
+        uint8_t* gst_meta_data = (uint8_t*)(minfo.data + (int)(4*minfo.size/5));
+        // std::byte gst_meta_data[minfo.size/5];
+        memcpy(gst_meta_data, meta_data.c_str(), minfo.size/5);
+    }
+    // <---
     gst_buffer_add_zed_src_meta( buf, info, pose, sens, src->object_detection, obj_count, obj_data);
 
     // ----> Timestamp meta-data
