@@ -2505,7 +2505,7 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
         // Meta data is after Depth
         uint8_t* gst_meta_data = (uint8_t*)(minfo.data + (int)(4*minfo.size/5));
         // std::byte gst_meta_data[minfo.size/5];
-        memcpy(gst_meta_data, meta_data.c_str(), minfo.size/5);
+        memcpy(gst_meta_data, meta_data.c_str(), meta_data.size());
     }
     // <---
     gst_buffer_add_zed_src_meta( buf, info, pose, sens, src->object_detection, obj_count, obj_data);
