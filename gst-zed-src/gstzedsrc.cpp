@@ -2120,27 +2120,27 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
     {
         
         // R data on Top
-        uint32_t* gst_r_data = (uint32_t*)(minfo.data);
+        uint16_t* gst_r_data = (uint16_t*)(minfo.data);
         
         // B data is after R
-        uint32_t* gst_g_data = (uint32_t*)(minfo.data + minfo.size/4);
+        uint16_t* gst_g_data = (uint16_t*)(minfo.data + minfo.size/4);
         
         // G data is after B
-        uint32_t* gst_b_data = (uint32_t*)(minfo.data + minfo.size/2);
+        uint16_t* gst_b_data = (uint16_t*)(minfo.data + minfo.size/2);
         
         // Depth data is after G
-        uint32_t* gst_d_data = (uint32_t*)(minfo.data + (int)(3*minfo.size/4));
+        uint16_t* gst_d_data = (uint16_t*)(minfo.data + (int)(3*minfo.size/4));
 
         // Left Imaage Data
         sl::uchar4* leftImgDataPtr = left_img.getPtr<sl::uchar4>();
         // Depth Data
         sl::float1* depthDataPtr = depth_data.getPtr<sl::float1>();
 
-        for (unsigned long i = 0; i < minfo.size/4; i++) {
-            *(gst_r_data++) = static_cast<uint32_t>((int)(*leftImgDataPtr).r);
-            *(gst_g_data++) = static_cast<uint32_t>((int)(*leftImgDataPtr).g);
-            *(gst_b_data++) = static_cast<uint32_t>((int)(*leftImgDataPtr).b);
-            *(gst_d_data++) = static_cast<uint32_t>(*(depthDataPtr++));
+        for (unsigned long i = 0; i < minfo.size/8; i++) {
+            *(gst_r_data++) = static_cast<uint16_t>((int)(*leftImgDataPtr).r);
+            *(gst_g_data++) = static_cast<uint16_t>((int)(*leftImgDataPtr).g);
+            *(gst_b_data++) = static_cast<uint16_t>((int)(*leftImgDataPtr).b);
+            *(gst_d_data++) = static_cast<uint16_t>(*(depthDataPtr++));
 
             leftImgDataPtr++;
         }
