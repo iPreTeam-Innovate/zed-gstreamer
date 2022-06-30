@@ -2137,9 +2137,9 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
         sl::float1* depthDataPtr = depth_data.getPtr<sl::float1>();
 
         for (unsigned long i = 0; i < minfo.size/8; i++) {
-            *(gst_r_data++) = static_cast<uint16_t>((int)(*leftImgDataPtr).r);
-            *(gst_g_data++) = static_cast<uint16_t>((int)(*leftImgDataPtr).g);
-            *(gst_b_data++) = static_cast<uint16_t>((int)(*leftImgDataPtr).b);
+            *(gst_r_data++) = static_cast<uint16_t>(100*(int)(*leftImgDataPtr).b);
+            *(gst_g_data++) = static_cast<uint16_t>(100*(int)(*leftImgDataPtr).g);
+            *(gst_b_data++) = static_cast<uint16_t>(100*(int)(*leftImgDataPtr).r);
             *(gst_d_data++) = static_cast<uint16_t>(*(depthDataPtr++));
 
             leftImgDataPtr++;
