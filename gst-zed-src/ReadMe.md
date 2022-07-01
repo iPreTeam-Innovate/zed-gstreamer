@@ -8,3 +8,5 @@ To get the 3D points forming a polygon bounds corresponding to the current visib
 ```
 zedsrc stream-type=6 enable-positional-tracking=true measure3D-reference-frame=1
 ```
+## NOTE
+Everydata is with respect to camera frame.
