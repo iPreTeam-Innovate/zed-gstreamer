@@ -10,3 +10,8 @@ zedsrc stream-type=6 enable-positional-tracking=true measure3D-reference-frame=1
 ```
 ## NOTE
 Everydata is with respect to camera frame.
+
+# References
+- https://www.stereolabs.com/docs/spatial-mapping/plane-detection/
+- https://www.stereolabs.com/docs/gstreamer/zed-camera-source/
+- https://support.stereolabs.com/hc/en-us/articles/4554115218711-How-can-I-convert-3D-world-coordinates-to-2D-image-coordinates-and-viceversa-
