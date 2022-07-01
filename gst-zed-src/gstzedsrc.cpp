@@ -2144,6 +2144,28 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
         // Right RGB data on half bottom
         memcpy((minfo.data + minfo.size/2), right_img.getPtr<sl::uchar4>(), minfo.size/2);
     }
+    auto camCalib = src->zed.getCameraInformation().camera_configuration.calibration_parameters.left_cam;
+    ZedCamInfo caliberation_info;
+    caliberation_info.fx = camCalib.fx;
+    caliberation_info.fy = camCalib.fy;
+    caliberation_info.cx = camCalib.cx;
+    caliberation_info.cy = camCalib.cy;
+    sl::Pose cam_pose;
+    if(src->pos_tracking && src->zed.getPosition( cam_pose ) == sl::POSITIONAL_TRACKING_STATE::OK){
+        sl::Plane plane;
+        sl::Transform resetTrackingFloorFrame;
+        auto find_plane_status = src->zed.findFloorPlane(plane, resetTrackingFloorFrame);
+        if(find_plane_status == sl::ERROR_CODE::SUCCESS){
+            // Reset positional tracking to align it with the floor plane frame
+            // zed.resetPositionalTracking(resetTrackingFloorFrame);
+            std::vector<sl::float3> plane_bounds = plane.getBounds();
+            for(auto point : plane_bounds){
+                int x = ( point[0] / point[2] ) * caliberation_info.fx + caliberation_info.cx;
+                int y = ( point[1] / point[2] ) * caliberation_info.fy + caliberation_info.cy;
+                left_img.setValue(x, y, 255);
+            }
+        }
+    }
     else if(src->stream_type== GST_ZEDSRC_LEFT_DEPTH)
     {
         // RGB data on half top
@@ -2241,12 +2263,30 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
     }
     // <---- Info metadata
 
+    // Added: Camera Caliberation Params for Left Camera
+    // ----> 
+    // auto camCalib = src->zed.getCameraInformation().camera_configuration.calibration_parameters.left_cam;
+    // ZedCamInfo caliberation_info;
+    caliberation_info.fx = camCalib.fx;
+    caliberation_info.fy = camCalib.fy;
+    caliberation_info.cx = camCalib.cx;
+    caliberation_info.cy = camCalib.cy;
+    // <---- 
+
+
     // ----> Positional Tracking metadata
     ZedPose pose;
+    // Added: put tracking state outside if
+    // --->
+    sl::POSITIONAL_TRACKING_STATE state;
+    // <---
     if(src->pos_tracking)
     {
         sl::Pose cam_pose;
-        sl::POSITIONAL_TRACKING_STATE state = src->zed.getPosition( cam_pose );
+        // Modified: put tracking state outside if
+        // --->
+        state = src->zed.getPosition( cam_pose );
+        // <---
 
         sl::Translation pos = cam_pose.getTranslation();
         pose.pose_avail = true;
@@ -2273,6 +2313,20 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
         pose.orient[2] = 0.0;
     }
     // <---- Positional Tracking
+
+    // Added: Plane Detection
+    // ---->
+    if(src->pos_tracking && state == sl::POSITIONAL_TRACKING_STATE::OK){
+        sl::Plane plane;
+        sl::Transform resetTrackingFloorFrame;
+        auto find_plane_status = src->zed.findFloorPlane(plane, resetTrackingFloorFrame);
+        if(find_plane_status == sl::ERROR_CODE::SUCCESS){
+            // Reset positional tracking to align it with the floor plane frame
+            // zed.resetPositionalTracking(resetTrackingFloorFrame);
+            std::vector<sl::float3> plane_bounds = plane.getBounds();
+        }
+    }
+    // <----
 
     // ----> Sensors metadata
     ZedSensors sens;

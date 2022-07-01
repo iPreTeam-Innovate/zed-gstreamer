@@ -29,6 +29,7 @@ G_BEGIN_DECLS
 
 typedef struct _GstZedSrcMeta GstZedSrcMeta;
 typedef struct _ZedInfo ZedInfo;
+typedef struct _ZedCamInfo ZedCamInfo;
 typedef struct _ZedPose ZedPose;
 typedef struct _ZedSensors ZedSensors;
 typedef struct _ZedImu ZedImu;
@@ -42,6 +43,13 @@ struct _ZedInfo {
     gint stream_type;
     guint grab_single_frame_width;
     guint grab_single_frame_height;
+};
+
+struct _ZedCamInfo {
+    gfloat fx;
+    gfloat fy;
+    gfloat cx;
+    gfloat cy;
 };
 
 struct _ZedPose {
