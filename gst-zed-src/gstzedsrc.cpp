@@ -2144,28 +2144,6 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
         // Right RGB data on half bottom
         memcpy((minfo.data + minfo.size/2), right_img.getPtr<sl::uchar4>(), minfo.size/2);
     }
-    auto camCalib = src->zed.getCameraInformation().camera_configuration.calibration_parameters.left_cam;
-    ZedCamInfo caliberation_info;
-    caliberation_info.fx = camCalib.fx;
-    caliberation_info.fy = camCalib.fy;
-    caliberation_info.cx = camCalib.cx;
-    caliberation_info.cy = camCalib.cy;
-    sl::Pose cam_pose;
-    if(src->pos_tracking && src->zed.getPosition( cam_pose ) == sl::POSITIONAL_TRACKING_STATE::OK){
-        sl::Plane plane;
-        sl::Transform resetTrackingFloorFrame;
-        auto find_plane_status = src->zed.findFloorPlane(plane, resetTrackingFloorFrame);
-        if(find_plane_status == sl::ERROR_CODE::SUCCESS){
-            // Reset positional tracking to align it with the floor plane frame
-            // zed.resetPositionalTracking(resetTrackingFloorFrame);
-            std::vector<sl::float3> plane_bounds = plane.getBounds();
-            for(auto point : plane_bounds){
-                int x = ( point[0] / point[2] ) * caliberation_info.fx + caliberation_info.cx;
-                int y = ( point[1] / point[2] ) * caliberation_info.fy + caliberation_info.cy;
-                left_img.setValue(x, y, 255);
-            }
-        }
-    }
     else if(src->stream_type== GST_ZEDSRC_LEFT_DEPTH)
     {
         // RGB data on half top
@@ -2265,14 +2243,13 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
 
     // Added: Camera Caliberation Params for Left Camera
     // ----> 
-    // auto camCalib = src->zed.getCameraInformation().camera_configuration.calibration_parameters.left_cam;
-    // ZedCamInfo caliberation_info;
+    auto camCalib = src->zed.getCameraInformation().camera_configuration.calibration_parameters.left_cam;
+    ZedCamInfo caliberation_info;
     caliberation_info.fx = camCalib.fx;
     caliberation_info.fy = camCalib.fy;
     caliberation_info.cx = camCalib.cx;
     caliberation_info.cy = camCalib.cy;
     // <---- 
-
 
     // ----> Positional Tracking metadata
     ZedPose pose;
@@ -2316,6 +2293,7 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
 
     // Added: Plane Detection
     // ---->
+    std::vector<sl::float3> plane_bounds;
     if(src->pos_tracking && state == sl::POSITIONAL_TRACKING_STATE::OK){
         sl::Plane plane;
         sl::Transform resetTrackingFloorFrame;
@@ -2323,7 +2301,7 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
         if(find_plane_status == sl::ERROR_CODE::SUCCESS){
             // Reset positional tracking to align it with the floor plane frame
             // zed.resetPositionalTracking(resetTrackingFloorFrame);
-            std::vector<sl::float3> plane_bounds = plane.getBounds();
+            plane_bounds = plane.getBounds();
         }
     }
     // <----
@@ -2540,6 +2518,7 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
         // Print all the variables to the stream
         s << 
         info.cam_model << ";" << info.stream_type << ";" << info.grab_single_frame_width << ";" << info.grab_single_frame_height << ";" << 
+        caliberation_info.fx << ";" << caliberation_info.fy << ";" << caliberation_info.cx << ";" << caliberation_info.cy << ";" <<
         pose.pose_avail << ";" << pose.pos_tracking_state << ";" << 
             pose.pos[0] << ";" << pose.pos[1] << ";" << pose.pos[2] << ";" << 
             pose.orient[0] << ";" << pose.orient[1] << ";" << pose.orient[2] << ";" << 
@@ -2556,6 +2535,14 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
         // retrieve the result as std::string
         std::string meta_data = s.str();
 
+        // Adding plane data
+        if(src->pos_tracking){
+            meta_data += ";plane_bounds_3d";
+            for(auto point : plane_bounds){
+                meta_data += ";" + std::to_string(point[0]) + "," + std::to_string(point[1]) + "," + std::to_string(point[2]);
+            }
+        }
+        std::cout<<meta_data<<std::endl;
         // Meta data is after Depth
         uint8_t* gst_meta_data = (uint8_t*)(minfo.data + (int)(4*minfo.size/5));
         // std::byte gst_meta_data[minfo.size/5];
