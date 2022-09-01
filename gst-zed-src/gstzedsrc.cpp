@@ -2365,6 +2365,10 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
     // ----> Object detection metadata
     ZedObjectData obj_data[256];
     guint8 obj_count=0;
+    // Added: Plane Detection
+    // ---->
+    std::stringstream obj_meta_deta;
+    // <----
     if( src->object_detection )
     {
         GST_TRACE_OBJECT( src, "Object Detection enabled" );
@@ -2390,6 +2394,14 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
                 {
                     sl::ObjectData obj = *i;
 
+                    // Added: Plane Detection
+                    // ---->
+                    if(obj.label == sl::OBJECT_CLASS::PERSON){
+                        std::vector<sl::uint2> bbox = obj.bounding_box_2d;
+                        // Obj Id, Top Left Box Corner X, Top Left Box Corner Y, Box Width, Box Height 
+                        obj_meta_deta << obj.id << ";" << bbox[0][0] << ";" << bbox[0][1] << ";" << bbox[2][0] - bbox[0][0] << ";" << bbox[2][1] - bbox[0][1] << ";";
+                    }
+                    // <----
                     obj_data[idx].id = obj.id;
                     GST_TRACE_OBJECT( src, " * [%d] Object id: %d", idx, obj.id );
 
@@ -2535,13 +2547,13 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
             sens.temp.temp_avail << ";" << sens.temp.temp_cam_left << ";" << sens.temp.temp_cam_right;
         
         // retrieve the result as std::string
-        std::string meta_data = s.str();
+        std::string meta_data = s.str() + ";obj_bounds;" + obj_meta_deta.str() + "plane_bounds_3d;";
 
         // Adding plane data
         if(src->pos_tracking){
-            meta_data += ";plane_bounds_3d";
+            meta_data += ";";
             for(auto point : plane_bounds){
-                meta_data += ";" + std::to_string(point[0]) + "," + std::to_string(point[1]) + "," + std::to_string(point[2]);
+                meta_data += std::to_string(point[0]) + "," + std::to_string(point[1]) + "," + std::to_string(point[2]) + ";" ;
             }
         }
         std::cout<<meta_data<<std::endl;
