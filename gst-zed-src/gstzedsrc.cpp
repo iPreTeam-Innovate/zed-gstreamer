@@ -2230,6 +2230,8 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
 
     // ----> Info metadata
     sl::CameraInformation cam_info = src->zed.getCameraInformation();
+    unsigned int serial_number = cam_info.serial_number;
+    double baseline = cam_info.calibration_parameters.T[0];
     ZedInfo info;
     info.cam_model = (gint) cam_info.camera_model;
     info.stream_type = src->stream_type;
@@ -2517,8 +2519,8 @@ static GstFlowReturn gst_zedsrc_fill( GstPushSrc * psrc, GstBuffer * buf )
         
         // Print all the variables to the stream
         s << 
-        info.cam_model << ";" << info.stream_type << ";" << info.grab_single_frame_width << ";" << info.grab_single_frame_height << ";" << 
-        caliberation_info.fx << ";" << caliberation_info.fy << ";" << caliberation_info.cx << ";" << caliberation_info.cy << ";" <<
+        info.cam_model << ";" << serial_number << ";" << info.stream_type << ";" << info.grab_single_frame_width << ";" << info.grab_single_frame_height << ";" << 
+        caliberation_info.fx << ";" << caliberation_info.fy << ";" << caliberation_info.cx << ";" << caliberation_info.cy << ";" << baseline << ";" <<
         pose.pose_avail << ";" << pose.pos_tracking_state << ";" << 
             pose.pos[0] << ";" << pose.pos[1] << ";" << pose.pos[2] << ";" << 
             pose.orient[0] << ";" << pose.orient[1] << ";" << pose.orient[2] << ";" << 
